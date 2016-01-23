@@ -1,0 +1,11 @@
+application: usermgr-998
+version: 2
+runtime: go
+api_version: go1
+
+handlers:
+ - url: /.*
+   script: _go_app
+ - url: /_cron/hourly
+   script: _go_app
+   login: admin

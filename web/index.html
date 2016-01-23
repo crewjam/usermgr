@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html ng-app="app">
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular.min.js"></script>
+	<script src="https://cdn.rawgit.com/neocotic/qr.js/master/qr.js"></script>
+
+	<link rel="stylesheet" href='https://fonts.googleapis.com/css?family=Open+Sans:300,400'>
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap.min.css">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/css/bootstrap-theme.min.css">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.3.0/css/font-awesome.min.css">
+	<style>
+	body {
+		font-family: 'Open Sans', sans-serif;
+		font-weight: 400;
+	}
+	</style>
+</head>
+<body>
+
+<div ng-controller="SelfCtrl" >
+	<nav class="navbar navbar-default">
+		<a class="navbar-brand" href="#">Account Settings</a>
+		<div class="navbar-form navbar-right">
+			<div class="form-group">
+				Setup Command
+				<input type="text" class="form-control" value="curl {{ setupURL }} | sudo sh">
+			</div>
+		</div>
+	</nav>
+	<div class="container">
+		<div class="row">
+			<div class="col-sm-4 list-group" ng-show="isAdmin">
+				<div class="list-group-item">
+					<a class="pull-right close" ng-click="isAdmin = false;">x</a>
+					<h4>Users</h4>
+				</div>
+				<a  class="list-group-item " ng-repeat="u in users"
+					ng-class="{'active': u === user}"
+					ng-click="SwitchUser(u)">
+					{{ u.name || "(none)"}}
+				</a>
+				<li class="list-group-item">
+					<button ng-click="NewUser()" class="btn btn-primary">
+						<i class="fa fa-plus"></i>
+						New User
+					</button>
+				</li>
+				<li class="list-group-item">
+					<button ng-click="ShowGlobalSettings()" class="btn btn-primary">
+						<i class="fa fa-world"></i>
+						Global Settings
+					</button>
+				</li>
+			</div>
+			<div class="col-sm-8" ng-class="{'col-sm-offset-2': !isAdmin}">
+				<div style="padding-bottom: 20px">
+					<button type="submit"
+						class="btn btn-primary"
+						ng-disabled="form.$pristine || saveInProgress"
+						ng-click="Save()">
+						<i class="fa fa-spin fa-spinner" ng-show="saveInProgress"></i>
+						<i class="fa fa-save" ng-show="!saveInProgress"></i>
+						Save Changes
+					</button>
+					<div class="pull-right">
+						<button ng-click="showDeleteUser=!showDeleteUser"
+								ng-show="isAdmin"
+								class="btn btn-danger"
+								title="Delete User">
+							<i class="fa fa-trash"></i>
+						</button>
+						<button type="submit"
+							class="btn btn-default"
+							ng-click="Refresh()"
+							title="Refresh">
+							<i class="fa fa-refresh"></i>
+						</button>
+					</div>
+				</div>
+				<div class="alert alert-danger" role="alert" ng-show="showDeleteUser">
+					<a class="close" ng-click="showDeleteUser=false">x</a>
+					<i class="fa fa-exclamation-triangle fa-3x pull-left"></i>
+					<div>Are you sure you want to delete this user?</div>
+					<button class="btn btn-danger" ng-click="DeleteUser(user)">Delete User</button>
+				</div>
+
+				<form name="form">
+					<div class="form-group">
+					    <label for="name">User Name</label>
+					    <input id="user_name" type="text" class="form-control" name="name" ng-model="user.name" placeholder="User Name" ng-disabled="!isAdmin">
+					</div>
+					<div class="form-group">
+					    <label for="real_name">Real Name</label>
+					    <input type="real_name" class="form-control" name="real_name" ng-model="user.real_name" placeholder="Real Name">
+					</div>
+					<div class="form-group">
+					    <label for="email">Email address</label>
+					    <input type="email" class="form-control" name="email" ng-model="user.email" placeholder="Email Address">
+					</div>
+					<div class="form-group">
+					    <label for="groups">Groups</label>
+					    <div ng-show="!user.groups || user.groups.length == 0">
+					    	<em>You are not a member of any groups.</em>
+					    </div>
+					    <ul class="list-group" ng-show="user.groups || isAdmin">
+					    	<li class="list-group-item" ng-repeat="group in user.groups">
+					    		{{ group }}
+					    		<a class="pull-right close"
+					    			ng-show="isAdmin"
+					    			title="remove user from group"
+					    			ng-click='DeleteGroup(user, group)'>
+					    		  <i class="fa fa-trash"></i>
+					    		</a>
+					    	</li>
+					    	<li class="list-group-item" style="padding: 0; border: none;" ng-show="isAdmin">
+					    		<div class="input-group">
+						    		<input type="text" class="form-control" name="group" ng-model="newGroup" 	placeholder="New Group">
+						    		<span class="input-group-btn">
+							    		<button
+							    			class="btn btn-default"
+					    					ng-disabled="!newGroup"
+							    			ng-click="AddUserToGroup(user, newGroup); newGroup='';">
+							    			Add
+							    		</button>
+							    	</span>
+					    		</div>
+							</li>
+					   	</ul>
+
+					</div>
+					<div class="form-group">
+					    <label for="authorized_keys">Authorized Keys</label>
+					    <ul class="list-group" >
+					    	<li
+					    		ng-repeat="authorized_key in user.authorized_keys track by $index"
+					    		class="list-group-item">
+					    		<a class="pull-right close"
+					    			title="remote SSH key"
+					    			ng-click='DeleteAuthorizedKey(user, yubikey)'>
+					    			<i class="fa fa-trash"></i>
+					    		</a>
+					    		<pre style="background: inherit; border: none;">{{ authorized_key }}</pre>
+					    	</li>
+					    </ul>
+					    <textarea class="form-control" rows="3" ng-model="newAuthorizedKey"></textarea>
+					    <button
+					    	class="btn btn-default"
+					    	ng-disabled="!newAuthorizedKey"
+					    	ng-click="AddAuthorizedKey(user, newAuthorizedKey); newAuthorizedKey='';">
+					    	<i class="fa fa-plus"></i> Add Authorized Key
+					    </button>
+					</div>
+					<div class="form-group">
+					    <label for="yubikeys">Two-factor authentication</label>
+		    	        <button type="button" class="btn btn-default btn-xs" ng-click="ShowTwoFactorTest()">Test</button>
+
+					    <ul class="list-group">
+					    	<li ng-repeat="yubikey_device in user.yubikeys track by $index"
+					    		class="list-group-item">
+					    		{{ yubikey_device.name || "Yubikey" }}
+					    		added on {{ yubikey_device.create_time }}
+					    		<code>{{ yubikey_device.device_id }}</code>
+					    		<span class="label label-default">yubikey</span>
+						    		<a
+						    			class="pull-right close"
+						    			title="remove key"
+						    			ng-click='DeleteOTPKey(user, yubikey)'>
+						    			<i class="fa fa-trash"></i>
+						    		</a>
+					    	</li>
+					    	<li ng-repeat="totp_device in user.totp_devices track by $index"
+					    		class="list-group-item">
+					    		{{ totp_device.name || "TOTP Device" }}
+					    		added on {{ totp_device.create_time }}
+					    		<span class="label label-default">TOTP</span>
+						    		<a
+						    			class="pull-right close"
+						    			title="remove key"
+						    			ng-click='DeleteTOTPDevice(user, totp_device)'>
+						    			<i class="fa fa-trash"></i>
+						    		</a>
+					    	</li>
+					    	<li ng-repeat="backup_code in user.backup_codes track by $index"
+					    		class="list-group-item">
+					    		{{ backup_code.name || "Backup Code" }}
+					    		added on {{ backup_code.create_time }}
+					    		<span class="label label-default">backup code</span>
+						    		<a
+						    			class="pull-right close"
+						    			title="remove key"
+						    			ng-click='DeleteBackupCode(user, backup_code)'>
+						    			<i class="fa fa-trash"></i>
+						    		</a>
+					    	</li>
+					   	</ul>
+
+					   	<div class="btn-group" role="group">
+					   		<button ng-click="ShowEnrollYubikeyModel(user)"
+					   			class="btn btn-default">
+			   					<i class="fa fa-key"></i> Enroll Yubikey
+			   				</button>
+					    	<button ng-click="ShowEnrollTOTP(user)"
+					    		ng-enable="!totpGenerateInProgress"
+					   			class="btn btn-default">
+			   					<i class="fa fa-qrcode" ng-class="{'fa-spin': totpGenerateInProgress}"></i> Enroll Smartphone (TOTP)
+			   				</button>
+					    	<button ng-click="ShowEnrollBackupCode(user)"
+					   			class="btn btn-default">
+			   					<i class="fa fa-key"></i> Generate Backup Code
+			   				</button>
+					    </div>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal" id="yubikeyEnroll">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+	        <h4 class="modal-title">Add Yubikey</h4>
+	      </div>
+	      <div class="modal-body">
+  		  	<p>
+	      		Press the button on your Yubikey now
+	      	</p>
+	    	<input type="text"
+		    	class="form-control"
+	   			ng-model="yubikey"
+	   			id="yubikey"
+	   			placeholder="Press the button on your Yubikey now"
+	   			ng-keypress="YubikeyKeypress($event)">
+		  </div>
+	      <div class="modal-footer">
+	        <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+	      </div>
+	    </div>
+	  </div>
+	</div>
+
+	<div class="modal" id="totpEnroll">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+	        <h4 class="modal-title">Add two-factor authentication</h4>
+	      </div>
+	      <div class="modal-body row">
+	  		<div class="col-md-6">
+		      	<p>
+		      		You'll need a two-factor authentication application on your
+		      		smartphone or tablet.
+		      	</p>
+		      	<p>
+		      		Open your two-factor authentication app and add your account by
+		      		scanning the QR code to the right.
+		      	</p>
+		      	<p>Manual entry code: <strong>{{totpCode}}</strong></p>
+		    </div>
+		    <div class="col-md-6">
+		    	<img id="totpQR">
+		    </div>
+		  </div>
+	      <div class="modal-footer">
+	        <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+	      </div>
+	    </div>
+	  </div>
+	</div>
+
+	<div class="modal" id="backupCodeEnroll">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+	        <h4 class="modal-title">Backup Codes</h4>
+	      </div>
+	      <div class="modal-body">
+		      	<p>
+		      		Backup codes can be used when you don't have access to your
+		      		second factor device. Be sure to keep your backup codes safe and
+		      		secure. You will not be able to view your backup code again.
+		      	</p>
+		      	<p>
+		      		Your backup code is:
+		      	</p>
+		      	<span style="font-size: 40pt">{{ backupCode }}</span>
+		      	<p>
+		      		Each code may be used only once, but you may generate as
+		      		many codes as you think you might need.
+		      	</p>
+		  </div>
+	      <div class="modal-footer">
+	        <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+	      </div>
+	    </div>
+	  </div>
+	</div>
+
+	<div class="modal" id="twoFactorTest">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+	        <h4 class="modal-title">Test Two Factor Authentication</h4>
+	      </div>
+	      <div class="modal-body">
+	      	<p>
+	      		Test your two factor authentication enrollement by
+	      		pressing the button on your Yubikey, typing a backup code,
+	      		or typing a TOTP code.
+	      	</p>
+      		<div class="input-group">
+			    <input type="text"
+			    	class="form-control"
+		   			ng-model="twoFactorTestCode"
+		   			id="twoFactorTestCodeInput"
+		   			placeholder="Type your code or press the yubikey button now"
+		   			ng-keypress="twoFactorTestKeypress($event)">
+		   		<span class="input-group-btn">
+		   			<button ng-click="twoFactorTest()"
+		   				ng-disable="twoFactorTestStatus == 'pending'"
+		   				class="btn btn-default">
+		   				<i class="fa fa-key" ng-show='twoFactorTestStatus != "pending"'></i>
+		   				<i class="fa fa-spinner fa-spin" ng-show='twoFactorTestStatus == "pending"'></i>
+		   				Test
+		   			</button>
+				</span>
+		    </div>
+			<div style="padding-top: 20px">
+		      	<div ng-show="twoFactorTestStatus=='ok'" class="alert alert-success">Your two factor code was accepted.</div>
+		      	<div ng-show="twoFactorTestStatus=='failed'" class="alert alert-danger">Your two factor code was not accepted.</div>
+		    </div>
+		  </div>
+	      <div class="modal-footer">
+	        <button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>
+	      </div>
+	    </div>
+	  </div>
+	</div>
+
+	<div class="modal" id="globalSettings">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+	        <h4 class="modal-title">Global Settings</h4>
+	      </div>
+	      <div class="modal-body">
+	      	<form action="/" method="POST">
+		      	<div class="input-group">
+				    <input type="text"
+				    	class="form-control"
+				    	name="yubikey_client_id"
+			   			ng-model="yubikey_client_id"
+			   			placeholder="Yubikey Client ID">
+			   	</div>
+			   	<div class="input-group">
+				    <input type="text"
+				    	class="form-control"
+				    	name="yubikey_client_secret"
+			   			ng-model="yubikey_client_secret"
+			   			placeholder="Yubikey Client Secret">
+			   	</div>
+		   		<button ng-click="saveGlobal()" class="btn btn-default">
+	   				<i class="fa fa-save"></i> Save
+	   			</button>
+		    </form>
+		  </div>
+	    </div>
+	  </div>
+	</div>
+
+
+</div>
+<script>
+'use strict';
+var app = angular.module('app', []);
+
+// isAdmin is set to true when delivering the index.html if the user is an
+// admin. It affects the UI only. Actual enforcement is handled by the server.
+var isAdmin = false;
+
+// hostKey is set when delivering the index.html
+var hostKey = '';
+
+app.controller('SelfCtrl', ['$scope', '$http', '$timeout', '$location', function($scope, $http, $timeout, $location) {
+	$scope.isAdmin = isAdmin;
+
+	// Use the anchor to determine which user we're handling
+	$scope.$on('$locationChangeSuccess', function() {
+		setUserFromLocation();
+	});
+	function setUserFromLocation() {
+		var userName = $location.path().replace(/^\//, "");
+		if (!userName) {
+			$scope.SwitchUser($scope.users[0]);
+		}
+
+		if (!$scope.user || $scope.user.name != userName) {
+			$scope.users.forEach(function(user) {
+				if (user.name == userName) {
+					$scope.SwitchUser(user);
+				}
+			});
+		}
+	}
+
+	$scope.SwitchUser = function(user) {
+		$scope.user = user;
+		$scope.showDeleteUser = false;
+		$location.path('/' + user.name)
+	}
+
+	$scope.Save = function() {
+		$scope.saveInProgress = true;
+		var user = $scope.user;
+		$http.put('/users/' + user.name, user)
+			.success(function(data, status) {
+				$scope.saveInProgress = false;
+				$scope.form.$setPristine();
+				console.log("saved " + user.name);
+			})
+			.error(function(data, status) {
+				$scope.saveInProgress = false;
+				console.log(
+					"Failed to save user " + user.name + ": " + status + " " + data);
+			});
+	}
+
+	// Browser prompt if you forget to save.
+	window.onbeforeunload = function() {
+	    if ($scope.form.$dirty) {
+	    	return "You have unsaved changes."
+	    }
+	};
+
+	$scope.Refresh = function() {
+		$scope.user = null;
+		$scope.users = [];
+		$http.get('/users/').success(function(data, status) {
+			$scope.users = data.users;
+			$scope.yubikey_client_id = data.yubikey_client_id;
+			$scope.yubikey_client_secret = data.yubikey_client_secret;
+			setUserFromLocation();
+			$scope.form.$setPristine();
+		});
+	};
+	$scope.Refresh();
+
+	$scope.NewUser = function() {
+		var user = {
+			name: '',
+			email: '',
+			groups: [],
+			authorized_keys: [],
+			yubikeys: [],
+			backup_codes: [],
+			totp_devices: [],
+		}
+		$scope.users = $scope.users || [];
+		$scope.users.push(user);
+		$scope.SwitchUser(user);
+        $timeout(function(){
+			angular.element('#user_name').trigger('focus');
+		});
+	};
+
+	$scope.DeleteUser = function(user) {
+		if ($scope.user == user) {
+			$scope.user = null;
+		}
+		$http.delete('/users/' + user.name)
+			.success(function(data, status) {
+				$scope.users.splice($scope.users.indexOf(user), 1);
+				$scope.SwitchUser($scope.users[0]);
+			})
+	}
+
+	$scope.AddUserToGroup = function(user, group) {
+		$scope.user.groups = $scope.user.groups || [];
+		$scope.user.groups.push(group);
+		$scope.form.$setDirty();
+	}
+
+	$scope.DeleteGroup = function(user, group) {
+		user.groups.splice(user.groups.indexOf(group), 1);
+		$scope.form.$setDirty();
+	}
+
+	$scope.AddAuthorizedKey = function(user, authorized_key) {
+		$scope.user.authorized_keys = $scope.user.authorized_keys || [];
+		$scope.user.authorized_keys.push(authorized_key);
+		$scope.form.$setDirty();
+	}
+
+	$scope.DeleteAuthorizedKey = function(user, authorized_key) {
+		user.authorized_keys.splice(user.authorized_keys.indexOf(authorized_key), 1);
+		$scope.form.$setDirty();
+	}
+
+	// ---- Yubikey ------------------------------------------------------------
+	$scope.ShowEnrollYubikeyModel = function(user) {
+		$('#yubikeyEnroll').modal('show');
+		$scope.yubikey = '';
+        $timeout(function(){
+			angular.element('#yubikey').trigger('focus');
+		})
+	}
+
+	$scope.YubikeyKeypress = function(event) {
+		if (event.keyCode != 13) {
+			return;
+		}
+		$scope.user.yubikeys = $scope.user.yubikeys || [];
+		$scope.user.yubikeys.push({
+			name: "",
+			create_time: new Date(),
+			device_id: $scope.yubikey.substr(0, 12),
+		})
+		$scope.form.$setDirty();
+		$scope.yubikey = '';
+
+        $timeout(function(){
+			$('#yubikeyEnroll').modal('hide');
+		});
+	}
+
+	$scope.DeleteOTPKey = function(user, yubikey) {
+		user.yubikeys.splice(user.yubikeys.indexOf(yubikey), 1);
+		$scope.form.$setDirty();
+	}
+
+	// ---- TOTP ---------------------------------------------------------------
+	$scope.ShowEnrollTOTP = function(user) {
+		$scope.totpGenerateInProgress = true;
+		$http.post("/_totp")
+			.success(function(data) {
+				$scope.totpGenerateInProgress = false;
+				var secret = data.secret;
+
+				var domain = window.location.origin.replace(/https?\:\/\//, "");
+				qr.image({
+					image: document.getElementById('totpQR'),
+					size: 8,
+					value: 'otpauth://totp/' + domain + ':' + $scope.user.name + '@' + domain +
+						'?secret=' + secret + '&issuer=' + domain + '&period=30&algorithm=SHA1&digits=6'
+				})
+				$scope.totpCode = secret
+				$scope.user.totp_devices = $scope.user.totp_devices || [];
+				$scope.user.totp_devices.push(data.device);
+				$scope.form.$setDirty();
+
+				$('#totpEnroll').modal('show');
+			})
+			.error(function() {
+				$scope.totpGenerateInProgress = false;
+			})
+	}
+
+	$scope.DeleteTOTPDevice = function(user, totp_device) {
+		user.totp_devices.splice(user.totp_devices.indexOf(totp_device), 1);
+		$scope.form.$setDirty();
+	}
+
+	// ---- Backup Code --------------------------------------------------------
+	$scope.BackupCode = "";
+	$scope.ShowEnrollBackupCode = function(user) {
+		$http.post("/_backup_code")
+			.success(function(data) {
+				$scope.backupCode = data.plaintext_code;
+				$scope.user.backup_codes = $scope.user.backup_codes || [];
+				$scope.user.backup_codes.push(data.backup_code);
+				$scope.form.$setDirty();
+
+				$('#backupCodeEnroll').modal('show');
+			});
+	}
+
+	$scope.DeleteBackupCode = function(user, backup_code) {
+		user.backup_codes.splice(user.backup_codes.indexOf(backup_code), 1);
+		$scope.form.$setDirty();
+	}
+
+	// ---- Two-Factor test ----------------------------------------------------
+	$scope.twoFactorTestStatus = '';
+	$scope.twoFactorTestCode = '';
+	$scope.ShowTwoFactorTest = function() {
+		$scope.twoFactorTestCode = '';
+		angular.element('#twoFactorTest').modal('show');
+        $timeout(function(){
+			angular.element('#twoFactorTestCodeInput').trigger('focus');
+		});
+	}
+	$scope.twoFactorTest = function() {
+		$scope.twoFactorTestStatus = 'pending';
+		$http.post("/validate?user=" + $scope.user.name + "&code=" + $scope.twoFactorTestCode)
+			.success(function() {
+				$scope.twoFactorTestStatus = 'ok'
+			})
+			.error(function() {
+				$scope.twoFactorTestStatus = 'failed'
+			});
+	}
+	$scope.twoFactorTestKeypress = function(event) {
+		if (event.keyCode != 13) {
+			return;
+		}
+		$scope.twoFactorTest();
+	}
+
+	// ---- Global
+
+	$scope.ShowGlobalSettings = function() {
+		angular.element('#globalSettings').modal('show');
+	};
+
+	$scope.setupURL = window.location.origin + "/setup/" + hostKey;
+}])
+
+</script>
+</body>
+</html>
